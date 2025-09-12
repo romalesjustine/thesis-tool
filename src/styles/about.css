@@ -1,0 +1,111 @@
+.about-upper-section {
+    margin-top: 25px;
+    display: flex;
+    width: 100%;
+    height: 200px;
+}
+
+.upper-left {
+    display: flex;
+    justify-content: center;
+    align-items: start;
+    width: 35%;
+    height: 100%;
+}
+
+.upper-left h1 {
+    font-size: 45px;
+    color: black;
+    width: 55%;
+}
+
+.h1-gray {
+    color: gray;
+}
+
+.upper-right {
+    width: 65%;
+    height: 100%;
+}
+
+.upper-right p {
+    font-size: 20px;
+    width: 85%;
+    line-height: 1.5;
+}
+
+.hr-upper {
+    align-self: center;
+    margin-top: 50px;
+    width: 90%;
+    border: none;
+    border-top: 2px solid black;
+}   
+
+.second-upper {
+    padding-top: 60px;
+    padding-left: 115px;
+    padding-bottom: 0;
+    width: 80%;
+    height: 160px;
+}
+
+.second-upper h1 {
+    width: 25%;
+    font-size: 45px;
+}
+
+.second-bottom {
+    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: end;
+    width: 100%;
+}
+
+.second-bottom p {
+    line-height: 1.5;
+    text-align: justify;
+    margin-right: 90px;
+    font-size: 20px;
+    width: 60%;
+}
+
+.second-bottom li {
+    margin-right: 190px;
+    line-height: 1.5;
+    text-align: justify;
+    font-size: 20px;
+    width: 80%;
+}
+
+.third-upper {
+    padding-top: 60px;
+    padding-left: 115px;
+    padding-bottom: 0;
+    width: 80%;
+    height: 160px;
+}
+
+.third-upper h1 {
+    width: 23%;
+    font-size: 45px;
+}
+
+.hr-bottom {
+    align-self: center;
+    width: 90%;
+    border: none;
+    margin-top: 30px;
+    border-top: 2px solid black;
+}   
+
+/* Group photo styles */
+.group-photo {
+    margin-top: 80px;
+    width: 100%;
+    height: 500px;
+    object-fit: cover;
+    display: block;
+}
+

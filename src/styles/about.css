@@ -2,7 +2,7 @@
     margin-top: 25px;
     display: flex;
     width: 100%;
-    height: 200px;
+    height: 150px;
 }
 
 .upper-left {
@@ -14,13 +14,13 @@
 }
 
 .upper-left h1 {
-    font-size: 45px;
-    color: black;
-    width: 55%;
+    font-size: 35px;
+    color: #373C7C;
+    width: 45%;
 }
 
 .h1-gray {
-    color: gray;
+    color: #4D59AA;
 }
 
 .upper-right {
@@ -31,7 +31,8 @@
 .upper-right p {
     font-size: 20px;
     width: 85%;
-    line-height: 1.5;
+    line-height: 2;
+    font-family: 'Lato';
 }
 
 .hr-upper {
@@ -39,7 +40,7 @@
     margin-top: 50px;
     width: 90%;
     border: none;
-    border-top: 2px solid black;
+    border-top: 2px solid #373C7C;
 }   
 
 .second-upper {
@@ -47,19 +48,23 @@
     padding-left: 115px;
     padding-bottom: 0;
     width: 80%;
-    height: 160px;
+    height: auto;
 }
 
 .second-upper h1 {
     width: 25%;
-    font-size: 45px;
+    font-size: 40px;
+    color: #373C7C;
 }
 
 .second-bottom {
+
     gap: 20px;
     display: flex;
     flex-direction: column;
-    align-items: end;
+    align-items: flex-end;
+    margin-top: -130px;      /* pull the whole block upwards */
+    margin-right: 90px;     /* same as your paragraph margin */
     width: 100%;
 }
 
@@ -69,14 +74,19 @@
     margin-right: 90px;
     font-size: 20px;
     width: 60%;
+    font-family: 'Lato';
+    color: rgba(0, 0, 0, 0.7);
+    font-weight: 400;
 }
 
 .second-bottom li {
-    margin-right: 190px;
-    line-height: 1.5;
-    text-align: justify;
-    font-size: 20px;
-    width: 80%;
+  margin-right: 50px;  
+  line-height: 1.5;
+  text-align: justify;
+  font-size: 20px;
+  width: 60%;
+  font-family: 'Lato'; 
+  font-weight: 500;         
 }
 
 .third-upper {
@@ -88,8 +98,9 @@
 }
 
 .third-upper h1 {
-    width: 23%;
-    font-size: 45px;
+    width: 30%;
+    font-size: 50px;
+    color: #373C7C;
 }
 
 .hr-bottom {
@@ -97,7 +108,7 @@
     width: 90%;
     border: none;
     margin-top: 30px;
-    border-top: 2px solid black;
+    border-top: 2px solid #373C7C;
 }   
 
 /* Group photo styles */
@@ -107,5 +118,6 @@
     height: 500px;
     object-fit: cover;
     display: block;
+    filter: grayscale(80%) brightness(90%);
 }
 

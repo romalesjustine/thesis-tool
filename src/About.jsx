@@ -3,12 +3,7 @@
 function About() {
   return (
     <>
-      <div className="video-background">
-        <video autoPlay muted loop>
-          <source src="./src/assets/background.mp4" type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
-      </div>
+      
       <div className="about-upper-section">
         <div className="upper-left">
           <h1>
@@ -18,10 +13,9 @@ function About() {
         </div>
         <div className="upper-right">
           <p>
-            LoReCast uses algorithm to help readers quickly understand long news
-            articles by generating concise summaries and tagging their topics —
-            automatically. Built for students, researchers, and everyday
-            readers.
+            Instantly get the gist of long news articles. LoReCast automatically generates concise
+            summaries and topical tags for long news articles, enabling students, researchers,
+            and professionals to accelerate their understanding and research.
           </p>
         </div>
       </div>
@@ -40,36 +34,37 @@ function About() {
         </div>
         <div className="second-bottom">
           <p>
-            Our mission is to help people navigate the overwhelming volume of
-            digital information by turning long-form news into clear,
-            categorized insights.
+            Our mission is to help people navigate the overwhelming volume of digital 
+            information by turning long-form news into clear, categorized insights.
+
           </p>
           <p>
-            In today’s world, reading through full-length news articles can be
-            time-consuming — especially when all you need is the core message.
-            LoReCast is a smart tool that helps you instantly understand news
-            articles by automatically generating accurate summaries and
-            assigning topic labels.
+            Information overload is a real challenge, with valuable details lost in lengthy news articles. 
           </p>
-          <p>We’ve designed LoReCast using cutting-edge AI:</p>
-          <ul>
-            <li>
-              Longformer for handling long documents and generating concise
-              summaries
-            </li>
-            <li>
-              Reinforcement Learning to improve the quality and relevance of
-              each output
-            </li>
-            <li>
-              Zero-shot Learning to accurately tag topics without needing
-              pre-labeled training data
-            </li>
-          </ul>
           <p>
-            This project was built to support students, researchers, and
-            everyday readers in navigating information overload with speed and
-            confidence.
+            While existing online algorithms have been the choice of many people for quick-read automation. 
+            However, this study found multiple issues in maintaining the readability and conciseness of the generated 
+            summaries, which often contain redundant information. While Longformer has demonstrated strong performance 
+            in terms of ROUGE scores, its inference speed (FPS) suggests that it may require more computational resources 
+            in practical applications.
+          </p>
+          <p>
+            This model focuses on optimizing the structure to enhance conciseness and fluency, achieving more efficient 
+            summarization of long articles.
+          </p>
+          <p>What sets LORECAST apart from existing summarization AIs is its:</p>
+          
+            <li>
+              Reinforcement learning (RL) component, which is designed to reduce redundancy and improve 
+              fluency in abstractive summarization.
+            </li>
+            <li>
+              Zero-Shot Learning (ZSL) module provides contextual categorization using the baseline Longformer model.
+            </li>
+          
+          <p>
+            The integration of Zero-Shot Learning greatly helps in understanding the context of long articles, as 
+            it enables the system to identify the category of a given news item.
           </p>
         </div>
       </div>

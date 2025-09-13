@@ -59,16 +59,18 @@ main {
 }
 
 .nav-links li, a {
-  font-size: 18px;
+  font-family: 'Lato', sans-serif;
+  font-size: 20px;
   display: inline;
   text-decoration: none;
-  color: black;
+  color: rgba(14, 31, 71, 1.0);
   margin-right: 15px;
 }
 
 /* Footer styles */
 
 footer {
+  font-family: 'Lato', sans-serif;
   margin-top: auto;
   color: #0C0C0C;
   padding: 20px;
@@ -107,15 +109,20 @@ footer {
 }
 
 .hero-container h1 {
+  font-family: 'Helvetica', 'Arial', sans-serif;
   font-size: 24px;
+  font-weight: bold;
   width: 40%;
   text-align: center;
 }
 
 .hero-container p {
+  font-family: 'Helvetica', 'Arial', sans-serif;
+  font-weight: 400;
   font-size: 15px;
   width: 35%;
   text-align: center;
+  color: rgba(0, 0, 0, 0.7);
 }
 
 

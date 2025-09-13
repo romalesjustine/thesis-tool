@@ -10,7 +10,7 @@ function Landing() {
       <div className="hero-container">
         <h1>
           Transform long news articles into concise,
-          insightfulsummaries—automatically categorized in seconds.
+          insightful summaries—automatically categorized in seconds.
         </h1>
         <p>
           Paste the text or upload your preferred news article, and let LORECAST

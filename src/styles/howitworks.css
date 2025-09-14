@@ -1,0 +1,192 @@
+/* Hero Section */
+.howitworks-hero {
+  margin-top: 25px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 200px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8ebff 100%);
+}
+
+.hero-content {
+  text-align: center;
+  max-width: 800px;
+  padding: 0 20px;
+}
+
+.hero-content h1 {
+  font-size: 48px;
+  color: #373C7C;
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+.highlight {
+  color: #4D59AA;
+}
+
+.hero-content p {
+  font-size: 22px;
+  line-height: 1.6;
+  font-family: 'Lato', sans-serif;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+/* Animation Container */
+.animation-container {
+  position: relative;
+  min-height: 600px;
+  background: linear-gradient(180deg, #f8f9ff 0%, #ffffff 50%, #f0f2ff 100%);
+  overflow: hidden;
+}
+
+.layer-background {
+  position: relative;
+  z-index: 1;
+  padding: 80px 20px;
+}
+
+/* === Infinite Looping Ad Carousel: 01→02→03→04→05 === */
+.step-flow {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 40px 20px;
+  margin: 0 auto;
+  max-width: 1400px;
+}
+
+/* Container that holds all steps — will animate */
+.step-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 30px;
+  width: calc(5 * (200px + 30px));
+  animation: slideLoop 20s linear infinite;
+}
+
+/* Step Card — same beautiful design */
+.step-card {
+  background: linear-gradient(145deg, #4D59AA, #373C7C);
+  border-radius: 16px;
+  padding: 40px;
+  width: 320px;
+  min-height: 230px;
+  color: white;
+  box-shadow: 0 10px 30px rgba(55, 60, 124, 0.3);
+  flex-shrink: 0; /* Prevent shrinking */
+  text-align: left;
+  position: relative;
+}
+
+
+/* Step Number */
+.step-number {
+  font-size: 40px;
+  font-weight: 900;
+  font-family: 'Helvetica', sans-serif;
+  margin-bottom: 16px;
+  opacity: 0.9;
+}
+
+.step-content p {
+  font-size: 17px;
+  line-height: 1.4;
+  font-family: 'Lato', sans-serif;
+  opacity: 0.95;
+  margin: 0;
+  word-wrap: break-word;        
+  overflow-wrap: break-word;    
+  white-space: normal;          
+  text-overflow: ellipsis;      
+}
+
+/* === Animation: Slide Left — 01→02→03→04→05 → loop === */
+@keyframes slideLoop {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * (5 * (200px + 30px))));
+  }
+}
+
+/* === Mobile Responsiveness === */
+@media (max-width: 768px) {
+  .step-flow {
+    padding: 20px 10px;
+    flex-direction: column;
+    align-items: center;
+    white-space: normal;
+  }
+
+  .step-container {
+    flex-direction: column;
+    gap: 15px;
+    animation: none; 
+  }
+
+  .step-card {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .step-card::after {
+    display: none;
+  }
+}
+
+
+/* Section Divider */
+.section-divider {
+  width: 90%;
+  border: none;
+  border-top: 2px solid #373C7C;
+  margin: 60px auto;
+}
+
+/* Call to Action Section */
+.cta-section {
+  background: linear-gradient(135deg, #373C7C 0%, #4D59AA 100%);
+  padding: 80px 50px;
+  text-align: center;
+  color: white;
+}
+
+.cta-content h2 {
+  font-size: 36px;
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+.cta-content p {
+  font-size: 20px;
+  font-family: 'Lato', sans-serif;
+  line-height: 1.5;
+  margin-bottom: 40px;
+  opacity: 0.9;
+}
+
+.cta-button {
+  background: white;
+  color: #373C7C;
+  border: none;
+  padding: 15px 40px;
+  font-size: 18px;
+  font-family: 'Lato', sans-serif;
+  font-weight: 600;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 20px rgba(255, 255, 255, 0.3);
+}
+
+.cta-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 255, 255, 0.4);
+  background: #f8f9ff;
+}

@@ -1,0 +1,60 @@
+.summarizer-section {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 80%;
+    height: 600px;
+}
+
+.text-input-wrapper {
+  position: relative;
+  display: inline-block;
+  padding: 10px;
+  border-radius: 15px;
+  background: linear-gradient(45deg, #7f1891, #13b62c);
+  width: 75%;
+  height: 100%;
+  margin-top: 50px;
+  margin-bottom: 50px;
+}
+
+.summarizer-section .text-input {
+  width: 95.5%;
+  height: 90%;
+  padding: 10px;
+  padding-right: 30px;
+  font-size: 16px;
+  resize: none;
+  background-color: #f7f7f7; 
+  border-radius: calc(15px - 8px);
+}
+
+.clear-btn {
+  position: absolute;
+  top: 20px;
+  right: 25px; 
+  z-index: 10; 
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.summarize-btn {
+  position: absolute;
+  bottom: 50px;
+  right: 25px; 
+  z-index: 10; 
+  border: none;
+  background-color: black;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 15px;
+}
+
+.summarize-btn i {
+  color: white;
+}
+
+

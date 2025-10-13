@@ -3,7 +3,6 @@ import { useState } from "react";
 function Summarizer() {
   const [inputText, setInputText] = useState("");
   const [summary, setSummary] = useState("");
-  const [category, setCategory] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -16,7 +15,6 @@ function Summarizer() {
     setIsLoading(true);
     setError("");
     setSummary("");
-    setCategory("");
 
     try {
       const response = await fetch("/api/summarize", {
@@ -33,7 +31,6 @@ function Summarizer() {
 
       const data = await response.json();
       setSummary(data.summary);
-      setCategory(data.category);
     } catch (err) {
       setError(err.message || "An error occurred while summarizing");
     } finally {
@@ -44,7 +41,6 @@ function Summarizer() {
   const handleClear = () => {
     setInputText("");
     setSummary("");
-    setCategory("");
     setError("");
   };
 
@@ -89,21 +85,12 @@ function Summarizer() {
         </div>
       )}
 
-      {(summary || category) && (
+      {summary && (
         <div className="results-section">
-          {category && (
-            <div className="category-result">
-              <h3>Category</h3>
-              <span className="category-tag">{category}</span>
-            </div>
-          )}
-
-          {summary && (
-            <div className="summary-result">
-              <h3>Summary</h3>
-              <p>{summary}</p>
-            </div>
-          )}
+          <div className="summary-result">
+            <h3>Summary</h3>
+            <p>{summary}</p>
+          </div>
         </div>
       )}
     </div>

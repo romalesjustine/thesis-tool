@@ -26,7 +26,10 @@ function Landing() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: inputText }),
+        body: JSON.stringify({
+          text: inputText,
+          mode: "smart" // Use smart mode for enhanced features
+        }),
       });
 
       if (!response.ok) {
@@ -69,49 +72,100 @@ function Landing() {
         </p>
 
         <div className="summarizer-section">
-          <div className="text-input-wrapper">
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Paste your article text here..."
-              className="text-input"
-              rows={8}
-              disabled={isLoading}
-            />
-            <button
-              onClick={handleClear}
-              className="clear-btn"
-              disabled={isLoading}
-            >
-              <i className="fa fa-trash-alt"></i>
-            </button>
+          {/* Default state: Only input section */}
+          {!isLoading && !summary && !category && (
+            <div className="text-input-wrapper">
+              <textarea
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Paste your article text here..."
+                className="text-input"
+                rows={8}
+                disabled={isLoading}
+              />
+              <button
+                onClick={handleClear}
+                className="clear-btn"
+                disabled={isLoading}
+              >
+                <i className="fa fa-trash-alt"></i>
+              </button>
 
-            <button
-              onClick={handleSummarize}
-              disabled={isLoading || !inputText.trim()}
-              className="summarize-btn"
-            >
-              {isLoading ? "Summarizing..." : "Summarize Article "} ✨
-            </button>
-          </div>
+              <button
+                onClick={handleSummarize}
+                disabled={isLoading || !inputText.trim()}
+                className="summarize-btn"
+              >
+                {isLoading ? "Summarizing..." : "Summarize Article "} ✨
+              </button>
+            </div>
+          )}
 
-          {error && <div className="error-message">{error}</div>}
+          {error && !isLoading && !summary && !category && (
+            <div className="error-message">{error}</div>
+          )}
 
-          {(summary || category) && (
-            <div className="results-section">
-              {category && (
-                <div className="category-result">
-                  <h3>Category</h3>
-                  <span className="category-tag">{category}</span>
+          {/* Split layout: After clicking summarize */}
+          {(isLoading || summary || category) && (
+            <div className="summarizer-container">
+              <div className="input-column">
+                <div className="text-input-wrapper">
+                  <textarea
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder="Paste your article text here..."
+                    className="text-input"
+                    rows={12}
+                    disabled={isLoading}
+                  />
+                  <div className="button-row">
+                    <button
+                      onClick={handleClear}
+                      className="clear-btn"
+                      disabled={isLoading}
+                    >
+                      <i className="fa fa-trash-alt"></i> Clear
+                    </button>
+
+                    <button
+                      onClick={handleSummarize}
+                      disabled={isLoading || !inputText.trim()}
+                      className="summarize-btn"
+                    >
+                      {isLoading ? "Summarizing..." : "Summarize Article "} ✨
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              {summary && (
-                <div className="summary-result">
-                  <h3>Summary</h3>
-                  <p>{summary}</p>
-                </div>
-              )}
+                {error && <div className="error-message">{error}</div>}
+              </div>
+
+              <div className="output-column">
+                {isLoading && (
+                  <div className="loading-state">
+                    <div className="loading-spinner"></div>
+                    <p>Analyzing your article...</p>
+                  </div>
+                )}
+
+                {(summary || category) && !isLoading && (
+                  <div className="results-section">
+                    <div className="output-wrapper">
+                      {category && (
+                        <div className="category-result">
+                          <span className="category-tag">{category}</span>
+                        </div>
+                      )}
+
+                      {summary && (
+                        <div className="summary-result">
+                          <p>{summary}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -66,7 +66,7 @@ LORECAST uses **Longformer Encoder-Decoder (LED)**, a transformer-based model sp
    - Configures length penalties based on complexity
    - Ensures proportional, accurate summaries
 
-6. **Abstractive Generation** (app.py:702-717)
+6. **Abstractive Generation** (app.py:460-472)
 
    - Uses beam search for high-quality output
    - Parameters:
@@ -76,14 +76,7 @@ LORECAST uses **Longformer Encoder-Decoder (LED)**, a transformer-based model sp
      - `repetition_penalty=1.7`: Strong anti-repetition
      - `encoder_no_repeat_ngram_size=5`: Avoids copying input
 
-7. **Post-Processing** (app.py:448-521)
-
-   - Removes hallucinations and contradictions
-   - Restores omitted numbers with context
-   - Fixes formatting and coherence issues
-   - Validates factual accuracy against source
-
-8. **Category Classification** (app.py:764-823)
+7. **Category Classification** (app.py:330-389)
    - Keyword-based scoring across 13+ categories
    - Returns best-matching category with confidence threshold
 
@@ -331,10 +324,10 @@ thesis-tool/
 
 ## Contributors
 
-Flores, Honey BSCS PUP Manila
-Gonzales, Grachella Jemyca BSCS PUP Manila
-Samaniego, Joshua BSCS PUP Manila
-Romales, Justine Carl BSCS PUP Manila
+- Flores, Honey BSCS PUP Manila
+- Gonzales, Grachella Jemyca BSCS PUP Manila
+- Samaniego, Joshua BSCS PUP Manila
+- Romales, Justine Carl BSCS PUP Manila
 
 ## Acknowledgments
 

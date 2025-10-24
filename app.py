@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import torch
-from transformers import LEDForConditionalGeneration, LEDTokenizerFast
+from transformers import LEDForConditionalGeneration, LEDTokenizerFast, pipeline
 import logging
 import os
 import re
+import sys
+import subprocess
 from collections import Counter, defaultdict
 
 try:
@@ -16,8 +18,17 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__)``
 CORS(app)
+
+# Global classifier cache
+CLASSIFIER = None
+
+# Fast core categories - optimized for speed
+DEFAULT_CATEGORIES = [
+    "political", "sports", "business", "technology", "health",
+    "science", "environmental", "entertainment", "crime"
+]
 
 class NewsSummarizer:
     def __init__(self, model_path="lorecast/model_final"):
@@ -275,6 +286,251 @@ class NewsSummarizer:
             'analysis': analysis
         }
 
+    def restore_numbers_in_summary(self, summary, article):
+        """ACTIVELY restore numbers that model omitted - inject them back into summary."""
+
+        # Define patterns to extract number+context from article and find orphaned units in summary
+        restoration_patterns = [
+            # Temperature: "35 degrees C" → summary has "degrees C"
+            {
+                'article_pattern': r'(\d+(?:\.\d+)?)\s*(degrees?\s*[CF]?|°[CF]?|celsius|fahrenheit)',
+                'summary_pattern': r'\b(degrees?\s*[CF]?|celsius|fahrenheit)\b',
+                'inject': lambda num, unit: f'{num} {unit}'
+            },
+            # Percentage: "25%" → summary has "percent"
+            {
+                'article_pattern': r'(\d+(?:\.\d+)?)\s*(%|percent)',
+                'summary_pattern': r'\b(percent|per\s+cent)\b',
+                'inject': lambda num, unit: f'{num}%'
+            },
+            # Currency with scale: "50 billion pesos" → summary has "billion pesos"
+            {
+                'article_pattern': r'([$P£€¥]?\s*\d+(?:,\d{3})*(?:\.\d+)?)\s+(billion|million|thousand)\s+(pesos?|dollars?|pounds?|euros?)?',
+                'summary_pattern': r'\b(billion|million|thousand)\s+(pesos?|dollars?|pounds?|euros?)\b',
+                'inject': lambda num, scale, curr: f'{num} {scale} {curr}'
+            },
+            # Job counts: "15,000 jobs" → summary has "jobs"
+            {
+                'article_pattern': r'(\d+(?:,\d{3})*)\s+(jobs|people|workers|deaths|cases|victims)',
+                'summary_pattern': r'\b(jobs|people|workers|deaths|cases|victims)\b',
+                'inject': lambda num, unit: f'{num} {unit}'
+            },
+            # Measurements: "100 meters" → summary has "meters"
+            {
+                'article_pattern': r'(\d+(?:\.\d+)?)\s+(meters?|km|kilometers?|miles?|feet)',
+                'summary_pattern': r'\b(meters?|km|kilometers?|miles?|feet)\b',
+                'inject': lambda num, unit: f'{num} {unit}'
+            },
+            # Counts: "12 bridges" → summary has "bridges"
+            {
+                'article_pattern': r'(\d+)\s+(bridges?|highways?|roads?|buildings?|hospitals?|schools?)',
+                'summary_pattern': r'\b(bridges?|highways?|roads?|buildings?|hospitals?|schools?)\b',
+                'inject': lambda num, unit: f'{num} {unit}'
+            },
+            # Time periods: "3 years" → summary has "years"
+            {
+                'article_pattern': r'(\d+)\s+(years?|months?|weeks?|days?|hours?)',
+                'summary_pattern': r'\b(years?|months?|weeks?|days?|hours?)\b',
+                'inject': lambda num, unit: f'{num} {unit}'
+            },
+        ]
+
+        original_summary = summary
+        injections_made = []
+
+        # Try each restoration pattern
+        for pattern_config in restoration_patterns:
+            # Find all number+unit combinations in article
+            article_matches = re.findall(pattern_config['article_pattern'], article, re.IGNORECASE)
+
+            if not article_matches:
+                continue
+
+            # Check if summary has the unit WITHOUT the number
+            for match in article_matches:
+                # Build the replacement text
+                if callable(pattern_config['inject']):
+                    try:
+                        replacement_text = pattern_config['inject'](*match)
+                    except:
+                        continue
+
+                    # Find orphaned unit in summary and replace with number+unit
+                    if re.search(pattern_config['summary_pattern'], summary, re.IGNORECASE):
+                        # Only inject if the full number+unit combo isn't already there
+                        if replacement_text.lower() not in summary.lower():
+                            summary = re.sub(
+                                pattern_config['summary_pattern'],
+                                replacement_text,
+                                summary,
+                                count=1,
+                                flags=re.IGNORECASE
+                            )
+                            injections_made.append(replacement_text)
+
+        if injections_made:
+            logger.info(f"Number injections made: {injections_made}")
+        else:
+            logger.info("No number injections needed")
+
+        return summary
+
+    def remove_hallucinations(self, summary, article):
+        """IMPROVED: Detect and remove hallucinated facts not in the original article."""
+        # Extract proper nouns (capitalized words) from summary
+        summary_entities = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', summary)
+        article_lower = article.lower()
+
+        # Check each entity exists in article
+        hallucinated = []
+        for entity in set(summary_entities):
+            if len(entity) <= 3:  # Skip very short words
+                continue
+            if entity.lower() not in article_lower:
+                # Common words that might not be hallucinations
+                common_words = {'The', 'This', 'That', 'These', 'Those', 'According', 'However', 'Officials', 'Government'}
+                if entity not in common_words:
+                    hallucinated.append(entity)
+                    logger.warning(f"Potential hallucination detected: '{entity}' not found in article")
+
+        # Remove sentences containing hallucinations
+        if hallucinated:
+            sentences = re.split(r'[.!?]+', summary)
+            clean_sentences = []
+            for sent in sentences:
+                has_hallucination = any(h in sent for h in hallucinated)
+                if not has_hallucination and sent.strip():
+                    clean_sentences.append(sent.strip())
+            if clean_sentences:
+                summary = '. '.join(clean_sentences)
+                if not summary.endswith('.'):
+                    summary += '.'
+                logger.info(f"Removed {len(hallucinated)} hallucinated entities: {hallucinated}")
+
+        return summary
+
+    def fix_contradictions(self, summary):
+        """IMPROVED: Remove contradictory or nonsensical sentences."""
+        sentences = re.split(r'[.!?]+', summary)
+        clean_sentences = []
+
+        for sent in sentences:
+            sent_lower = sent.lower().strip()
+            if not sent_lower:
+                continue
+
+            # Skip nonsensical patterns
+            nonsense_patterns = [
+                'unclear if the militants are militants',
+                'unclear if the abductors are',
+                'it is not clear if the militants',
+                'whether or not to vote on whether to vote',
+                'whether to vote for it',
+                'whether the militants are militants',
+                'if the militants are members of',
+            ]
+
+            is_nonsense = any(pattern in sent_lower for pattern in nonsense_patterns)
+            if is_nonsense:
+                logger.info(f"Removed contradictory/nonsensical sentence: {sent[:80]}...")
+                continue
+
+            # Check for excessive repetition within sentence
+            words = sent.split()
+            if len(words) > 5:
+                # Count word frequency in sentence
+                word_counts = {}
+                for word in words:
+                    word_lower = word.lower()
+                    word_counts[word_lower] = word_counts.get(word_lower, 0) + 1
+
+                # If any word appears more than 3 times in one sentence, it's likely garbled
+                max_count = max(word_counts.values()) if word_counts else 0
+                if max_count > 3:
+                    logger.info(f"Removed repetitive sentence: {sent[:80]}...")
+                    continue
+
+            clean_sentences.append(sent.strip())
+
+        if clean_sentences:
+            return '. '.join(clean_sentences) + '.'
+        return summary
+
+    def post_process_summary(self, summary, article):
+        """PHASE 4: Post-process summary for better coverage and coherence."""
+        # Remove common prefixes that indicate model artifacts
+        summary = re.sub(r'^(NEW:\s*|SUMMARY:\s*|Summary:\s*|IMPORTANT NUMBERS.*?:\s*)', '', summary, flags=re.IGNORECASE)
+
+        # Remove the instruction prompt if it leaked into summary
+        summary = re.sub(r'Summarize the article.*?:\s*', '', summary, flags=re.IGNORECASE)
+        summary = re.sub(r'INCLUDE ALL IMPORTANT NUMBERS:\s*', '', summary, flags=re.IGNORECASE)
+
+        # Split into sentences and process each
+        sentences = re.split(r'[.!?]+', summary)
+        clean_sentences = []
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 8:  # Skip very short fragments
+                continue
+
+            # Check for coherent English text
+            words = sentence.split()
+            coherent_words = []
+
+            for i, word in enumerate(words):
+                # Skip words that are clearly garbled
+                if len(word) > 20:  # Extremely long words are likely garbled
+                    break
+                if not re.search(r'[a-zA-Z]', word):  # Must contain letters
+                    continue
+                if len(word) > 0 and sum(1 for c in word if c.isalpha()) / len(word) < 0.6:  # At least 60% letters
+                    break
+
+                # ENHANCED: Detect repetitive patterns like "and and and"
+                if len(coherent_words) >= 2:
+                    if word == coherent_words[-1] == coherent_words[-2]:  # Same word repeated 3 times
+                        break
+                    if word == "and" and coherent_words[-1] == "and":  # Stop at "and and"
+                        break
+
+                coherent_words.append(word)
+
+            # Only keep sentences with reasonable content
+            if len(coherent_words) >= 5:  # At least 5 coherent words
+                clean_sentence = ' '.join(coherent_words)
+                # Stop processing if we hit nonsense patterns
+                if any(pattern in clean_sentence.lower() for pattern in ['inquiry into', 'click here', 'biggest takeaway', 'stay closed']):
+                    break
+                clean_sentences.append(clean_sentence)
+
+        # Reconstruct clean summary
+        if clean_sentences:
+            summary = '. '.join(clean_sentences)
+            if not summary.endswith('.'):
+                summary += '.'
+        else:
+            # Fallback: take first 100 words and clean them
+            words = summary.split()[:100]
+            clean_words = [w for w in words if len(w) <= 15 and re.search(r'[a-zA-Z]', w)]
+            summary = ' '.join(clean_words[:50]) + '.'
+
+        # IMPROVED: Remove contradictions and nonsensical sentences
+        summary = self.fix_contradictions(summary)
+
+        # IMPROVED: Remove hallucinated facts
+        summary = self.remove_hallucinations(summary, article)
+
+        # Restore numbers from article (existing pattern-based restoration)
+        summary = self.restore_numbers_in_summary(summary, article)
+
+        # Final cleanup
+        summary = re.sub(r'\s+', ' ', summary)  # Remove extra spaces
+        summary = re.sub(r'\s*\.\s*', '. ', summary)  # Fix spacing around periods
+        summary = summary.strip()
+
+        return summary
+
     def extract_key_sentences(self, article_text, target_sentences=6):
         """Extract the most important sentences using hybrid scoring with entity awareness."""
         sentences = re.split(r'[.!?]+', article_text)
@@ -473,15 +729,24 @@ class NewsSummarizer:
 
             # Decode summary
             summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-            logger.info(f"Generated summary: {summary}")
+            logger.info(f"RAW MODEL OUTPUT: {summary}")
 
-            # Enhanced category classification
-            category = self.classify_category(text.lower())
+            # DISABLED: Post-process for better quality
+            # if use_dynamic:
+            #     summary = self.post_process_summary(summary, text)
+            #     logger.info("PHASE 4 ENHANCEMENT: Content coverage optimization applied")
+            #     logger.info(f"POST-PROCESSED OUTPUT: {summary}")
 
-            # Return simplified result with just summary and category
+            logger.info("POST-PROCESSING DISABLED - Returning raw model output only")
+
+            # Perform article classification - INTEGRATED with GPU support and caching
+            article_category = self.classify_article_fast(text)
+            logger.info(f"Article classified as: {article_category}")
+
+            # Return result with summary and category
             result = {
                 "summary": summary,
-                "category": category
+                "category": article_category
             }
 
             return result
@@ -508,66 +773,148 @@ class NewsSummarizer:
 
         return covered / total_entities
 
-    def classify_category(self, text):
-        """Keyword-based category classification with scoring - matches classify_article.py implementation"""
+    def fallback_classify(self, text, categories):
+        """Simple keyword-based classification fallback - EXACT COPY from classify_article.py"""
         text_lower = text.lower()
-
-        # Comprehensive keywords for each category - EXACTLY from classify_article.py
-        keywords = {
-            # Core topics
-            "political": ["government", "president", "congress", "election", "vote", "senator", "representative", "speaker", "minister", "parliament", "policy", "administration", "legislature"],
-            "sports": ["game", "team", "player", "score", "match", "championship", "league", "tournament", "coach", "stadium", "athlete", "competition", "olympics"],
-            "business": ["company", "market", "stock", "profit", "revenue", "investment", "financial", "trade", "corporate", "ceo", "industry", "economic"],
-            "technology": ["tech", "software", "computer", "digital", "internet", "ai", "artificial intelligence", "data", "app", "platform", "innovation", "startup"],
-            "health": ["health", "medical", "hospital", "doctor", "patient", "disease", "treatment", "medicine", "vaccine", "healthcare", "clinic", "therapy"],
-            "science": ["research", "study", "scientist", "discovery", "experiment", "laboratory", "scientific", "biology", "physics", "chemistry", "findings", "analysis"],
-            "entertainment": ["movie", "film", "music", "celebrity", "actor", "singer", "show", "concert", "album", "theater", "hollywood", "artist"],
-            "education": ["school", "university", "student", "teacher", "education", "learning", "academic", "college", "curriculum", "graduation", "classroom"],
-            "crime": ["police", "arrest", "criminal", "court", "trial", "sentence", "investigation", "law enforcement", "crime", "justice", "lawyer", "judge"],
-            "international": ["country", "nation", "international", "foreign", "diplomatic", "embassy", "border", "global", "worldwide", "treaty", "relations"],
-
-            # Specialized topics
-            "environmental": ["climate", "environment", "pollution", "carbon", "green", "sustainability", "renewable", "emissions", "conservation", "ecosystem", "global warming"],
-            "wildlife": ["animals", "species", "wildlife", "nature", "habitat", "endangered", "conservation", "biodiversity", "ecosystem", "fauna", "flora"],
-            "pollution": ["mercury", "toxic", "contamination", "chemical", "waste", "pollutant", "hazardous", "poison", "cleanup", "environmental damage"],
-            "conservation": ["protect", "preserve", "endangered", "habitat", "ecosystem", "biodiversity", "restoration", "sanctuary", "reserve", "sustainability"],
-            "research": ["study", "analysis", "findings", "data", "investigation", "survey", "report", "evidence", "methodology", "results", "conclusion"],
-            "medical": ["patient", "treatment", "diagnosis", "therapy", "clinical", "symptoms", "cure", "medication", "surgical", "medical care"],
-            "military": ["army", "navy", "air force", "defense", "soldier", "war", "combat", "military", "troops", "weapons", "security"],
-            "agriculture": ["farming", "crops", "farmers", "livestock", "agricultural", "harvest", "rural", "food production", "farming", "cultivation"],
-            "energy": ["power", "electricity", "oil", "gas", "renewable", "solar", "wind", "nuclear", "energy", "fuel", "electricity"],
-            "transportation": ["traffic", "highway", "road", "vehicle", "transportation", "infrastructure", "construction", "bridge", "tunnel", "transit"],
-            "space": ["space", "nasa", "satellite", "rocket", "mars", "moon", "astronaut", "cosmic", "universe", "galaxy", "planetary"],
-            "disaster": ["disaster", "emergency", "crisis", "accident", "fire", "flood", "earthquake", "storm", "hurricane", "rescue", "evacuation"],
-            "immigration": ["immigrant", "refugee", "border", "migration", "asylum", "citizenship", "visa", "deportation", "immigration", "migrant"]
-        }
-
-        # Fast core categories for common articles
-        DEFAULT_CATEGORIES = [
-            "political", "sports", "business", "technology", "health",
-            "science", "environmental", "entertainment", "crime"
-        ]
-
         scores = {}
 
-        # Calculate scores for all categories
-        for category in DEFAULT_CATEGORIES:
-            if category in keywords:
-                keyword_list = keywords[category]
-                score = sum(1 for keyword in keyword_list if keyword in text_lower)
-                scores[category] = score / len(keyword_list)  # Normalize by number of keywords
+        # Comprehensive keywords for each category - ENHANCED
+        keywords = {
+            # Core topics
+            "political": ["government", "president", "congress", "election", "vote", "senator", "representative", "speaker", "minister", "parliament", "policy", "administration", "legislature", "political", "politics", "prime minister", "diplomat", "diplomatic", "treaty", "state department", "foreign minister", "cabinet", "legislation", "sovereignty", "territorial", "jurisdiction", "accession", "ratification", "peace talks", "negotiations", "bilateral", "multilateral", "geopolitical", "state party", "governor", "mayor", "referendum", "coalition", "opposition", "ruling party"],
+            "sports": ["game", "team", "player", "score", "match", "championship", "league", "tournament", "coach", "stadium", "athlete", "competition", "olympics", "win", "won", "loss", "defeat", "victory", "season", "playoff", "finals", "goal", "points", "quarterback", "pitcher", "striker", "defender", "midfielder", "baseball", "basketball", "football", "soccer", "tennis", "golf", "racing", "boxing", "swimming", "games", "players", "competed", "champion", "sports", "sporting event", "athletic", "contestants", "delegations", "medals", "prizes", "winning", "compete", "skill", "talents"],
+            "business": ["company", "market", "stock", "profit", "revenue", "investment", "financial", "trade", "corporate", "ceo", "industry", "economic", "business", "economy", "earnings", "shares", "shareholders", "merger", "acquisition", "bankruptcy", "fiscal", "quarterly", "annual report", "wall street", "nasdaq", "dow jones", "trading", "commodities", "export", "import", "manufacturing", "retail", "sales", "venture capital"],
+            "technology": ["tech", "software", "computer", "digital", "internet", "ai", "artificial intelligence", "app", "platform", "innovation", "startup", "algorithm", "programming", "silicon valley", "smartphone", "tablet", "laptop", "hardware", "cybersecurity", "cloud computing", "blockchain", "cryptocurrency", "bitcoin", "machine learning", "robotics", "5g", "wireless", "semiconductor", "processor", "operating system", "android", "ios", "windows", "linux"],
+            "health": ["health", "medical", "hospital", "doctor", "patient", "disease", "treatment", "medicine", "vaccine", "healthcare", "clinic", "therapy", "illness", "syndrome", "infection", "outbreak", "epidemic", "pandemic", "symptoms", "diagnosis", "fever", "virus", "bacterial", "die", "died", "death", "mortality", "sick", "typhus", "plague", "malaria", "cancer", "diabetes", "heart disease", "stroke", "pneumonia", "tuberculosis", "mental health", "surgery", "pharmaceutical", "nursing", "emergency room", "infectious disease", "pathogen", "contagious", "immunization", "medication", "prescription", "medical care", "health crisis"],
+            "science": ["research", "study", "scientist", "discovery", "experiment", "laboratory", "scientific", "biology", "physics", "chemistry", "findings", "analysis", "researchers", "peer review", "journal", "publication", "hypothesis", "theory", "observation", "data analysis", "clinical trial", "methodology", "genome", "dna", "molecular", "quantum", "particle", "astronomy", "geology", "neuroscience", "breakthrough", "innovation"],
+            "entertainment": ["movie", "film", "music", "celebrity", "actor", "singer", "show", "concert", "album", "theater", "hollywood", "artist", "actress", "director", "producer", "performance", "premiere", "box office", "streaming", "netflix", "spotify", "grammy", "oscar", "emmy", "awards", "television", "tv series", "drama", "comedy", "band", "musician", "entertainment industry", "red carpet", "blockbuster"],
+            "education": ["school", "university", "student", "teacher", "education", "learning", "academic", "college", "curriculum", "graduation", "classroom", "professor", "tuition", "campus", "enrollment", "degree", "bachelor", "master", "doctorate", "phd", "undergraduate", "graduate", "scholarship", "exam", "test scores", "literacy", "educational", "pedagogy", "faculty"],
+            "crime": ["police", "arrest", "criminal", "court", "trial", "sentence", "investigation", "law enforcement", "crime", "justice", "lawyer", "judge", "murder", "robbery", "theft", "assault", "fraud", "prosecutor", "defendant", "guilty", "innocent", "verdict", "prison", "jail", "felony", "misdemeanor", "detective", "forensic", "evidence", "witness", "testimony", "indictment", "conviction"],
+            "international": ["country", "nation", "international", "foreign", "diplomatic", "embassy", "border", "global", "worldwide", "treaty", "relations", "united nations", "nato", "eu", "european union", "middle east", "asia", "africa", "latin america", "sanctions", "trade agreement", "ambassador", "summit", "conference", "alliance", "cooperation"],
+
+            # Specialized topics - ENHANCED
+            "environmental": ["climate", "environment", "pollution", "carbon", "green", "sustainability", "renewable", "emissions", "conservation", "ecosystem", "global warming", "climate change", "greenhouse gas", "carbon footprint", "deforestation", "renewable energy", "solar power", "wind energy", "environmental protection", "recycling", "waste management", "air quality", "water quality"],
+            "wildlife": ["animals", "species", "wildlife", "nature", "habitat", "endangered", "conservation", "biodiversity", "ecosystem", "fauna", "flora", "endangered species", "national park", "wildlife refuge", "animal population", "extinction", "breeding program", "poaching", "habitat loss"],
+            "pollution": ["mercury", "toxic", "contamination", "chemical", "waste", "pollutant", "hazardous", "poison", "cleanup", "environmental damage", "air pollution", "water pollution", "soil contamination", "industrial waste", "sewage", "smog", "acid rain"],
+            "conservation": ["protect", "preserve", "endangered", "habitat", "ecosystem", "biodiversity", "restoration", "sanctuary", "reserve", "sustainability", "wildlife conservation", "nature preserve", "protected area", "environmental stewardship"],
+            "research": ["study", "analysis", "findings", "data", "investigation", "survey", "report", "evidence", "methodology", "results", "conclusion", "peer reviewed", "research paper", "academic study", "empirical data", "statistical analysis"],
+            "medical": ["patient", "treatment", "diagnosis", "therapy", "clinical", "symptoms", "cure", "medication", "surgical", "medical care", "disease", "illness", "infection", "outbreak", "epidemic", "died", "death", "mortality", "fever", "typhus", "virus", "bacterial", "medical emergency", "intensive care", "pathology", "radiology"],
+            "military": ["army", "navy", "air force", "defense", "soldier", "war", "combat", "military", "troops", "weapons", "security", "armed forces", "marines", "veterans", "deployment", "warfare", "battalion", "regiment", "pentagon", "military operation", "defense budget", "national security"],
+            "agriculture": ["farming", "crops", "farmers", "livestock", "agricultural", "harvest", "rural", "food production", "farming", "cultivation", "agriculture", "irrigation", "pesticides", "fertilizer", "farmland", "cattle", "poultry", "grain", "wheat", "corn", "rice", "farm subsidies"],
+            "energy": ["power", "electricity", "oil", "gas", "renewable", "solar", "wind", "nuclear", "energy", "fuel", "electricity", "power plant", "energy production", "petroleum", "coal", "natural gas", "hydroelectric", "geothermal", "energy sector", "power grid", "utility"],
+            "transportation": ["traffic", "highway", "road", "vehicle", "transportation", "infrastructure", "construction", "bridge", "tunnel", "transit", "automobile", "railway", "railroad", "aviation", "airport", "shipping", "maritime", "public transportation", "subway", "bus", "train"],
+            "space": ["space", "nasa", "satellite", "rocket", "mars", "moon", "astronaut", "cosmic", "universe", "galaxy", "planetary", "space station", "launch", "orbit", "spacecraft", "apollo", "international space station", "spacex", "astronomical", "telescope"],
+            "disaster": ["disaster", "emergency", "crisis", "accident", "fire", "flood", "earthquake", "storm", "hurricane", "rescue", "evacuation", "natural disaster", "tornado", "tsunami", "wildfire", "emergency response", "casualties", "damage", "relief efforts", "survivors"],
+            "immigration": ["immigrant", "refugee", "border", "migration", "asylum", "citizenship", "visa", "deportation", "immigration", "migrant", "immigration policy", "border control", "illegal immigration", "green card", "naturalization", "immigration reform", "refugee crisis"]
+        }
+
+        for category in categories:
+            if category.lower() in keywords:
+                keyword_list = keywords[category.lower()]
+                # Count matches with weighted scoring
+                total_score = 0
+                for keyword in keyword_list:
+                    # Multi-word keywords get exact phrase matching
+                    if ' ' in keyword:
+                        if keyword in text_lower:
+                            total_score += 2  # Higher weight for exact phrase match
+                    else:
+                        # Single word keywords use word boundary matching
+                        if re.search(r'\b' + re.escape(keyword) + r'\b', text_lower):
+                            total_score += 1
+
+                scores[category] = total_score / len(keyword_list)  # Normalize by number of keywords
             else:
                 scores[category] = 0
+
+        # Context-aware boosting: Detect strong category indicators
+        # Sports events organized by government should still be classified as sports
+        sports_indicators = [
+            'sports commission', 'games', 'competition', 'champion', 'players competed',
+            'overall champion', 'emerged as', 'won', 'medal', 'tournament', 'playoff'
+        ]
+        political_indicators = [
+            'election', 'voted', 'legislation', 'bill', 'senate', 'congress session',
+            'political party', 'campaign', 'referendum'
+        ]
+
+        sports_signal = sum(1 for indicator in sports_indicators if indicator in text_lower)
+        political_signal = sum(1 for indicator in political_indicators if indicator in text_lower)
+
+        # Apply context boost
+        if 'sports' in scores and sports_signal >= 3:
+            scores['sports'] *= 1.3  # Boost sports by 30% if strong sports context
+        if 'political' in scores and political_signal >= 2:
+            scores['political'] *= 1.2  # Boost political by 20% if strong political context
 
         # Sort by score
         sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-        # Return the category with highest score if above threshold (0.05 minimum)
-        if sorted_scores and sorted_scores[0][1] >= 0.05:
-            # Capitalize first letter for display
-            return sorted_scores[0][0].capitalize()
+        # Convert to expected format
+        result = {
+            'labels': [item[0] for item in sorted_scores],
+            'scores': [item[1] for item in sorted_scores]
+        }
 
-        return "General"
+        return result
+
+    def load_classifier(self):
+        """Load the zero-shot classification model with GPU support and caching."""
+        global CLASSIFIER
+        if CLASSIFIER is None:
+            logger.info("Loading zero-shot classification model...")
+            try:
+                # Use GPU if available (device 0 for cuda, -1 for cpu)
+                device = 0 if torch.cuda.is_available() else -1
+                CLASSIFIER = pipeline(
+                    "zero-shot-classification",
+                    model="facebook/bart-large-mnli",
+                    device=device
+                )
+                logger.info(f"Classification model loaded successfully on {'GPU' if device == 0 else 'CPU'}!")
+            except Exception as e:
+                logger.error(f"Error loading classification model: {e}")
+                logger.info("Falling back to keyword-based classification...")
+                CLASSIFIER = "fallback"
+        return CLASSIFIER
+
+    def classify_article_fast(self, text, categories=None, threshold=0.05):
+        """Fast classification - keyword first, then AI if needed."""
+        if categories is None:
+            categories = DEFAULT_CATEGORIES
+
+        # Try fast keyword matching first
+        keyword_result = self.fallback_classify(text, categories)
+        if keyword_result['scores'][0] >= 0.1:  # Good keyword match
+            return keyword_result['labels'][0]
+
+        # Only use AI model if keyword matching is weak
+        classifier = self.load_classifier()
+
+        if classifier == "fallback":
+            return keyword_result['labels'][0]
+
+        try:
+            # Truncate text for speed
+            max_length = 500
+            words = text.split()
+            if len(words) > max_length:
+                text = ' '.join(words[:max_length])
+
+            result = classifier(text, categories)
+
+            # Take first result above threshold
+            for label, score in zip(result['labels'], result['scores']):
+                if score >= threshold:
+                    return label
+
+            # Fallback to keyword result
+            return keyword_result['labels'][0]
+
+        except Exception as e:
+            logger.error(f"Classification error: {e}")
+            return keyword_result['labels'][0]
+
 
 # Initialize the summarizer (this will load the model at startup)
 summarizer = None

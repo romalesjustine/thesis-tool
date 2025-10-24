@@ -28,7 +28,7 @@ function Landing() {
         },
         body: JSON.stringify({
           text: inputText,
-          mode: "smart" // Use smart mode for enhanced features
+          mode: "smart",
         }),
       });
 

@@ -739,6 +739,14 @@ class NewsSummarizer:
 
             logger.info("POST-PROCESSING DISABLED - Returning raw model output only")
 
+            # DISABLED: Post-process for better quality
+            # if use_dynamic:
+            #     summary = self.post_process_summary(summary, text)
+            #     logger.info("PHASE 4 ENHANCEMENT: Content coverage optimization applied")
+            #     logger.info(f"POST-PROCESSED OUTPUT: {summary}")
+
+            logger.info("POST-PROCESSING DISABLED - Returning raw model output only")
+
             # Perform article classification - INTEGRATED with GPU support and caching
             article_category = self.classify_article_fast(text)
             logger.info(f"Article classified as: {article_category}")
